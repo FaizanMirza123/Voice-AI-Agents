@@ -5,6 +5,12 @@ from datetime import datetime, timedelta
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends,HTTPException,status
+from config import Session_local
+from schemas import User
+from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 app = FastAPI()
 app.add_middleware(
@@ -17,14 +23,29 @@ app.add_middleware(
 API_Key= "2a94228d-fa25-47b1-95f4-96dc2039f8c7"
 # API URL: https://api.vapi.ai/assistant/
 # Assisstant ID: 7b1234fd-957e-4621-a3a8-da311fd936e2
+security=HTTPBearer()
 
-
-users_db = {}
-assistant_id_to_name={}
 SECRET_KEY = "your_secret_key_here"
 ALGORITHM = "HS256" 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+async def get_db():
+    async with Session_local() as session:
+        yield session
+        
+def verify_jwt(credentials:HTTPAuthorizationCredentials = Depends(security) ):
+    token= credentials.credentials
+    try:
+        payload=jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if email not in users_db:
+            raise HTTPException(status_code=401, detail="User not found")
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401,detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401,detail="Invalid token")
+    
 def get_password_hash(password):
     return pwd_context.hash(password)
 
@@ -37,7 +58,7 @@ def create_access_token(data: dict, expires_delta=None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 @app.get("/")
-def get_assisstants():
+def get_assisstants(user=Depends(verify_jwt)):
     url = "https://api.vapi.ai/assistant"
     headers = {
         "Authorization": f"Bearer {API_Key}"
@@ -56,7 +77,7 @@ def get_assisstants():
     else:
         return []
 @app.get("/messages")
-def get_messages():
+def get_messages(user=Depends(verify_jwt)):
     
     assistants_url = "https://api.vapi.ai/assistant"
     assistants_headers = {"Authorization": f"Bearer {API_Key}"}
@@ -87,45 +108,20 @@ def get_messages():
    
 
 @app.post("/register")
-async def register(request: Request):
-    data = await request.json()
-    method = data.get("method", "form")
-    if method == "google":
-        # Simulate Google signup (in real app, verify token)
-        email = data.get("email")
-        username = data.get("username", email.split("@")[0] if email else None)
-        if not email:
-            raise HTTPException(status_code=400, detail="Email required for Google signup")
-        if email in users_db:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        users_db[email] = {"username": username, "email": email, "oauth": "google"}
-        token = create_access_token({"sub": email})
-        return {"msg": "Registered with Google", "access_token": token}
-    elif method == "facebook":
-        # Simulate Facebook signup (in real app, verify token)
-        email = data.get("email")
-        username = data.get("username", email.split("@")[0] if email else None)
-        if not email:
-            raise HTTPException(status_code=400, detail="Email required for Facebook signup")
-        if email in users_db:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        users_db[email] = {"username": username, "email": email, "oauth": "facebook"}
-        token = create_access_token({"sub": email})
-        return {"msg": "Registered with Facebook", "access_token": token}
-    else:
-        # Standard form registration
-        email = data.get("email")
-        username = data.get("username")
-        password = data.get("password")
-        confirm_password = data.get("confirm_password")
-        if not all([email, username, password, confirm_password]):
-            raise HTTPException(status_code=400, detail="All fields are required")
-        if password != confirm_password:
-            raise HTTPException(status_code=400, detail="Passwords do not match")
-        if email in users_db:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        hashed_password = get_password_hash(password)
-        users_db[email] = {"username": username, "email": email, "hashed_password": hashed_password}
-        token = create_access_token({"sub": email})
-        return {"msg": "User registered successfully", "access_token": token}
-
+async def register(request: Request, db:AsyncSession = Depends(get_db)):
+    data= await request.json()
+    method= data.get("method","form")
+    email=data.get("email")
+    username=data.get("email")
+    password=data.get("password")
+    confirm_password=data.get("confirm_password")
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    if not all([email,username,password,confirm_password]):
+        raise HTTPException(status_code=400, detail="All fields are required")
+    
+    result=await db.execute(select(User).where(User.email==email))
+    print("Real: ", result)
+   
+        
+    
