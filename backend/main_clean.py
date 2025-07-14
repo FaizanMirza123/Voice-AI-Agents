@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from passlib.context import CryptContext
-from jose import jwt
+import jwt
 from datetime import datetime, timedelta, timezone
 import requests
 from fastapi.middleware.cors import CORSMiddleware

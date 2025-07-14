@@ -1,213 +1,257 @@
 "use client";
-import axios from "axios";
-import { useState } from "react";
-import { Toaster, toast } from "react-hot-toast";
+import { useState, useEffect } from "react";
+import { toast } from "react-hot-toast";
+import { apiService } from "@/services/apiService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+
 export default function Home() {
-  let api = "http://localhost:8000"; // Replace with your actual API endpoint during deployment
-  //Normal Submission of Registeration
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const { login, isAuthenticated, loading } = useAuth();
+  const router = useRouter();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [formLoading, setFormLoading] = useState({
+    register: false,
+    login: false,
+  });
 
-  const [emailLog, SetEmailLog] = useState("");
-  const [passwordLog, setPasswordlog] = useState("");
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!loading && isAuthenticated()) {
+      router.push("/dashboard");
+    }
+  }, [loading, isAuthenticated, router]);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  // Registration form state
+  const [regForm, setRegForm] = useState({
+    email: "",
+    username: "",
+    password: "",
+    confirm_password: "",
+  });
 
-    axios
-      .post(`${api}/register`, {
-        email,
-        username,
-        password,
-        confirm_password: confirmPassword,
-      })
-      .then((res) => {
-        localStorage.setItem("token", res.data.access_token);
-        toast.success(res.data.msg);
-        window.location.href = "/Home";
-      })
-      .catch((err) => {
-        toast.error("Registration failed. Please try again Later.");
-      });
+  // Login form state
+  const [loginForm, setLoginForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setFormLoading((prev) => ({ ...prev, register: true }));
+    try {
+      // Convert email to lowercase for backend processing
+      const formData = {
+        ...regForm,
+        email: regForm.email.toLowerCase(),
+      };
+      const response = await apiService.register(formData);
+      login(response.access_token);
+      toast.success("Registration successful!");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Registration failed");
+    } finally {
+      setFormLoading((prev) => ({ ...prev, register: false }));
+    }
   };
-  const handleLogin = async (event) => {
-    event.preventDefault();
 
-    axios
-      .post(`${api}/login`, {
-        email: emailLog,
-        password: passwordLog,
-      })
-      .then((res) => {
-        localStorage.setItem("token", res.data.access_token);
-        toast.success("Login successful");
-        window.location.href = "/Home";
-      });
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setFormLoading((prev) => ({ ...prev, login: true }));
+    try {
+      // Convert email to lowercase for backend processing
+      const formData = {
+        ...loginForm,
+        email: loginForm.email.toLowerCase(),
+      };
+      const response = await apiService.login(formData);
+      login(response.access_token);
+      toast.success("Login successful!");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Login failed");
+    } finally {
+      setFormLoading((prev) => ({ ...prev, login: false }));
+    }
   };
-  return (
-    // First div of 2 columns that divides in login and registration
-    <div className="min-h-screen grid grid-cols-2">
-      <Toaster />
-      {/* Left side: Login Side */}
-      <div className="h-full w-full bg-gradient-to-r from-white to-gray-200 flex flex-col justify-center items-center relative">
-        <div className="w-full max-w-md p-8 bg-white bg-opacity-80 rounded-xl shadow-lg">
-          <h2 className="text-2xl font-bold mb-6 text-center bg-gradient-to-r from-purple-500 to-pink-400 text-transparent bg-clip-text">
-            Sign in to your account
-          </h2>
-          <form>
-            <label className="block mb-2 text-gray-700 font-semibold">
-              Email
-            </label>
-            <input
-              type="email"
-              value={emailLog}
-              onChange={(e) => {
-                SetEmailLog(e.target.value);
-              }}
-              className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Enter your email"
-            />
-            <label className="block mb-2 text-gray-700 font-semibold">
-              Password
-            </label>
-            <input
-              type="password"
-              value={passwordLog}
-              onChange={(e) => {
-                setPasswordlog(e.target.value);
-              }}
-              className="w-full mb-6 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Enter your password"
-            />
-            <button
-              type="submit"
-              onClick={handleLogin}
-              className="w-full py-2 rounded bg-gradient-to-r from-purple-500 to-pink-300 text-white font-bold text-lg shadow-md hover:from-purple-600 hover:to-pink-400 transition"
-            >
-              Log In
-            </button>
-          </form>
-          <div className="flex items-center my-6">
-            <div className="flex-grow h-px bg-gray-300" />
-            <span className="mx-3 text-gray-400">or</span>
-            <div className="flex-grow h-px bg-gray-300" />
-          </div>
-          <div className="flex flex-col gap-3">
-            <a
-              href="/fake-google-login"
-              className="flex items-center justify-center gap-2 border border-gray-300 rounded py-2 bg-white bg-opacity-60 hover:bg-opacity-80 transition"
-            >
-              <img src="/Google.svg" alt="Google" className="w-5 h-5 mr-3" />
-              <span className="text-gray-700 font-medium">
-                Sign in with Google
-              </span>
-            </a>
-            <a
-              href="/fake-facebook-login"
-              className="flex items-center justify-center gap-2 border border-gray-300 rounded py-2 bg-white bg-opacity-60 hover:bg-opacity-80 transition"
-            >
-              <img src="/facebook.svg" alt="Facebook" className="w-5 h-5" />
-              <span className="text-gray-700 font-medium">
-                Sign in with Facebook
-              </span>
-            </a>
-          </div>
-        </div>
-        <div className="absolute bottom-4 left-0 w-full text-center text-xs text-gray-400">
-          &copy; {new Date().getFullYear()} Voice AI Agents. All rights
-          reserved.
-        </div>
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
       </div>
+    );
+  }
 
-      {/* Right side: Registeration Side */}
-      <div className="h-full w-full bg-gradient-to-l from-black to-gray-800 flex flex-col justify-center items-center relative">
-        <div className="w-full max-w-md p-8 bg-black bg-opacity-70 rounded-xl shadow-lg">
-          <h2 className="text-2xl font-bold mb-6 text-center bg-gradient-to-r from-white to-gray-300 text-transparent bg-clip-text">
-            Create an Account
-          </h2>
-          <form onSubmit={handleSubmit}>
-            <label className="block mb-2 text-gray-200 font-semibold">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-              }}
-              className="w-full mb-4 px-4 py-2 border border-gray-600 rounded bg-gray-900 bg-opacity-60 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Enter your email"
-            />
-            <label className="block mb-2 text-gray-200 font-semibold">
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-              }}
-              className="w-full mb-4 px-4 py-2 border border-gray-600 rounded bg-gray-900 bg-opacity-60 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Choose a username"
-            />
-            <label className="block mb-2 text-gray-200 font-semibold">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-              }}
-              className="w-full mb-4 px-4 py-2 border border-gray-600 rounded bg-gray-900 bg-opacity-60 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Enter your password"
-            />
-            <label className="block mb-2 text-gray-200 font-semibold">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-              }}
-              className="w-full mb-6 px-4 py-2 border border-gray-600 rounded bg-gray-900 bg-opacity-60 text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Confirm your password"
-            />
-            <button
-              type="submit"
-              className="w-full py-2 rounded bg-gradient-to-r from-purple-500 to-pink-300 text-white font-bold text-lg shadow-md hover:from-purple-600 hover:to-pink-400 transition"
-            >
-              Sign Up
-            </button>
-          </form>
-          <div className="flex items-center my-6">
-            <div className="flex-grow h-px bg-gray-600" />
-            <span className="mx-3 text-gray-400">or</span>
-            <div className="flex-grow h-px bg-gray-600" />
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Main Card */}
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden fadeIn">
+          {/* Header with Toggle */}
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6">
+            <div className="flex rounded-lg bg-white/20 p-1">
+              <button
+                onClick={() => setIsSignUp(false)}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-300 ${
+                  !isSignUp
+                    ? "bg-white text-purple-600 shadow-lg"
+                    : "text-white hover:bg-white/10"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => setIsSignUp(true)}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-300 ${
+                  isSignUp
+                    ? "bg-white text-purple-600 shadow-lg"
+                    : "text-white hover:bg-white/10"
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-3">
-            <a
-              href="/fake-google-signup"
-              className="flex items-center justify-center gap-2 border border-gray-400 rounded py-2 bg-white bg-opacity-10 hover:bg-opacity-20 transition"
-            >
-              <img src="/google.svg" alt="Google" className="w-5 h-5 mr-3" />
-              <span className="text-black font-medium">
-                Sign up with Google
-              </span>
-            </a>
-            <a
-              href="/fake-facebook-signup"
-              className="flex items-center justify-center gap-2 border border-gray-400 rounded py-2 bg-white bg-opacity-10 hover:bg-opacity-20 transition"
-            >
-              <img src="/facebook.svg" alt="Facebook" className="w-5 h-5" />
-              <span className="text-black font-medium">
-                Sign up with Facebook
-              </span>
-            </a>
+
+          {/* Form Content */}
+          <div className="p-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">
+                {isSignUp ? "Create Account" : "Welcome Back"}
+              </h2>
+              <p className="text-gray-600">
+                {isSignUp
+                  ? "Join Voice AI Agents and start building"
+                  : "Sign in to your Voice AI Agents account"}
+              </p>
+            </div>
+
+            {/* Login Form */}
+            {!isSignUp && (
+              <form onSubmit={handleLogin} className="space-y-6 slideInUp">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) =>
+                      setLoginForm({ ...loginForm, email: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) =>
+                      setLoginForm({ ...loginForm, password: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Enter your password"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={formLoading.login}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg shadow-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {formLoading.login ? "Signing In..." : "Sign In"}
+                </button>
+              </form>
+            )}
+
+            {/* Registration Form */}
+            {isSignUp && (
+              <form onSubmit={handleRegister} className="space-y-4 slideInUp">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={regForm.email}
+                    onChange={(e) =>
+                      setRegForm({ ...regForm, email: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={regForm.username}
+                    onChange={(e) =>
+                      setRegForm({ ...regForm, username: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Choose a username"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={regForm.password}
+                    onChange={(e) =>
+                      setRegForm({ ...regForm, password: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Create a password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={regForm.confirm_password}
+                    onChange={(e) =>
+                      setRegForm({
+                        ...regForm,
+                        confirm_password: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 transition-all duration-200"
+                    placeholder="Confirm your password"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={formLoading.register}
+                  className="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold rounded-lg shadow-lg hover:from-pink-600 hover:to-purple-600 transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {formLoading.register ? "Creating Account..." : "Sign Up"}
+                </button>
+              </form>
+            )}
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6">
+          <p className="text-white/80 text-sm">
+            Voice AI Agents - Build intelligent voice assistants
+          </p>
         </div>
       </div>
     </div>
