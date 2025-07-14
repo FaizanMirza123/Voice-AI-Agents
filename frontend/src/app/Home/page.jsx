@@ -27,7 +27,7 @@ export default function page() {
             setData(res.data);
             // Handle the response data as needed
           })
-          .catch((err) => {
+          .catch((err) => { 
             console.error("Error fetching data:", err);
             // Handle the error as needed
           });

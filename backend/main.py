@@ -8,9 +8,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi import Depends,HTTPException,status
 from config import Session_local
-from schemas import User
+from models import User
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+from models import Base
+from config import engine
 
 app = FastAPI()
 app.add_middleware(
@@ -29,16 +32,25 @@ SECRET_KEY = "your_secret_key_here"
 ALGORITHM = "HS256" 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
 async def get_db():
     async with Session_local() as session:
         yield session
-        
-def verify_jwt(credentials:HTTPAuthorizationCredentials = Depends(security) ):
+@app.on_event("startup")
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def verify_jwt(credentials:HTTPAuthorizationCredentials = Depends(security) , db:AsyncSession=Depends(get_db)):
     token= credentials.credentials
     try:
         payload=jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
-        if email not in users_db:
+        result=await db.execute(select(User).where(User.email==email))
+        
+        if result.scalar_one_or_none() is None:
             raise HTTPException(status_code=401, detail="User not found")
         return payload
     except jwt.ExpiredSignatureError:
@@ -57,7 +69,11 @@ def create_access_token(data: dict, expires_delta=None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-@app.get("/")
+@app.get("/protected")
+async def protected_route(payload=Depends(verify_jwt)):
+    return {"message": "You are authenticated", "user": payload}
+    
+@app.get("/assistants")
 def get_assisstants(user=Depends(verify_jwt)):
     url = "https://api.vapi.ai/assistant"
     headers = {
@@ -112,7 +128,7 @@ async def register(request: Request, db:AsyncSession = Depends(get_db)):
     data= await request.json()
     method= data.get("method","form")
     email=data.get("email")
-    username=data.get("email")
+    username=data.get("username")
     password=data.get("password")
     confirm_password=data.get("confirm_password")
     if password != confirm_password:
@@ -121,7 +137,37 @@ async def register(request: Request, db:AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="All fields are required")
     
     result=await db.execute(select(User).where(User.email==email))
-    print("Real: ", result)
-   
-        
-    
+    if result.scalar_one_or_none() is None and method == "form":
+        user=User(
+            email=email,
+            username=username,
+            password=get_password_hash(password)
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return {"message":"User registered successfully"
+                ,"access_token":create_access_token({"sub":email})}
+    else:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+@app.post("/login")
+async def login(request:Request,db:AsyncSession = Depends(get_db)):
+  data=await request.json()
+  email=data.get("email")
+  password=data.get("password")
+  
+  if email is None or password is None:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+  result=await db.execute(select(User).where(User.email==email))
+  user=result.scalar_one_or_none()
+  if user is None:
+      raise HTTPException(status_code=400, detail="Invalid email or password")
+  if not pwd_context.verify(password,user.password):
+      raise HTTPException(status_code=400, detail="Invalid email or password")
+  access_token=create_access_token({"sub":email})
+  return {
+      "message":"User logged in successfully",
+      "access_token":access_token,
+      "token_type":"bearer"
+  }

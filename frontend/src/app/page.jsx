@@ -9,6 +9,10 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [emailLog, SetEmailLog] = useState("");
+  const [passwordLog, setPasswordlog] = useState("");
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -28,6 +32,20 @@ export default function Home() {
         toast.error("Registration failed. Please try again Later.");
       });
   };
+  const handleLogin = async (event) => {
+    event.preventDefault();
+
+    axios
+      .post(`${api}/login`, {
+        email: emailLog,
+        password: passwordLog,
+      })
+      .then((res) => {
+        localStorage.setItem("token", res.data.access_token);
+        toast.success("Login successful");
+        window.location.href = "/Home";
+      });
+  };
   return (
     // First div of 2 columns that divides in login and registration
     <div className="min-h-screen grid grid-cols-2">
@@ -44,6 +62,10 @@ export default function Home() {
             </label>
             <input
               type="email"
+              value={emailLog}
+              onChange={(e) => {
+                SetEmailLog(e.target.value);
+              }}
               className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
               placeholder="Enter your email"
             />
@@ -52,11 +74,16 @@ export default function Home() {
             </label>
             <input
               type="password"
+              value={passwordLog}
+              onChange={(e) => {
+                setPasswordlog(e.target.value);
+              }}
               className="w-full mb-6 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
               placeholder="Enter your password"
             />
             <button
               type="submit"
+              onClick={handleLogin}
               className="w-full py-2 rounded bg-gradient-to-r from-purple-500 to-pink-300 text-white font-bold text-lg shadow-md hover:from-purple-600 hover:to-pink-400 transition"
             >
               Log In
